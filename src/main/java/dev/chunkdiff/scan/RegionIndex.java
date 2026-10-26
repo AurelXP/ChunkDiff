@@ -19,8 +19,8 @@ import java.util.stream.Stream;
 public final class RegionIndex {
     private static final Pattern NAME = Pattern.compile("r\\.(-?\\d+)\\.(-?\\d+)\\.mca");
 
-    /** @param bytes taille occupee sur disque (secteurs de 4096 octets) */
-    public record Coord(int cx, int cz, int bytes) {}
+    /** @param bytes taille occupee sur disque (secteurs de 4096 octets) ; @param timestamp derniere modif (secondes epoch) */
+    public record Coord(int cx, int cz, int bytes, int timestamp) {}
 
     private RegionIndex() {}
 
@@ -63,15 +63,15 @@ public final class RegionIndex {
             int rz = Integer.parseInt(m.group(2));
             byte[] header;
             try (InputStream in = Files.newInputStream(f)) {
-                header = in.readNBytes(4096);
+                header = in.readNBytes(8192);
             }
-            if (header.length < 4096) continue;
+            if (header.length < 8192) continue;
             ByteBuffer bb = ByteBuffer.wrap(header);
             for (int i = 0; i < 1024; i++) {
                 int v = bb.getInt(i * 4);
                 int sectors = v & 0xFF;
                 if (v == 0 || sectors == 0) continue;
-                res.add(new Coord(rx * 32 + (i & 31), rz * 32 + (i >> 5), sectors * 4096));
+                res.add(new Coord(rx * 32 + (i & 31), rz * 32 + (i >> 5), sectors * 4096, bb.getInt(4096 + i * 4)));
             }
         }
         res.sort(Comparator.comparingInt(Coord::cx).thenComparingInt(Coord::cz));

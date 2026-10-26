@@ -1,6 +1,7 @@
 name: ChunkDiff
 version: '${version}'
 main: dev.chunkdiff.ChunkDiffPlugin
+bootstrapper: dev.chunkdiff.ChunkDiffBootstrap
 api-version: '26.3'
 description: Stocke uniquement la difference entre les chunks et la seed.
 folia-supported: false

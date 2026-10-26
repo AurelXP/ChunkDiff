@@ -33,6 +33,7 @@ tasks.processResources {
 }
 
 tasks.jar {
+    manifest { attributes["Main-Class"] = "dev.chunkdiff.cli.CompactMain" }
     from(configurations.runtimeClasspath.get().map { if (it.isDirectory) it else zipTree(it) })
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
     archiveFileName.set("ChunkDiff-$pluginVersion.jar")

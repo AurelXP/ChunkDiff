@@ -23,6 +23,9 @@ CIBLES
  Modrinth : publication REPORTEE a beaucoup plus tard. Ne pas s'en occuper maintenant.
 
 CONTRAINTES DE TRAVAIL (IMPORTANT)
+ - L'UTILISATEUR UTILISE UN HEBERGEUR EN LIGNE : il n'a que le panel (start/stop/restart, console,
+   gestionnaire de fichiers/FTP) et ses plugins. PAS de ligne de commande, pas de `java -jar` serveur
+   eteint. Tout doit passer par des commandes in-game/console et par le redemarrage du serveur.
  - Tu n'as PAS acces direct a GitHub en ecriture, ni a Modrinth. Pas de compilateur Java
    dans le sandbox : tu ne peux pas compiler. La CI GitHub Actions est le juge.
  - L'utilisateur ne peut pas faire git push. Il cree/colle les fichiers via le site GitHub
@@ -45,7 +48,10 @@ ARCHITECTURE (src/main/java/dev/chunkdiff/)
                         ecriture atomique tmp+rename ; load/save/remove
  delta/RestoreListener  ChunkLoadEvent (isNewChunk) -> rejoue le delta
  scan/PristineScanner   (vide) comparera chaque chunk a sa version "seed pure"
- debug/DebugCommand     /chunkdiff testdelta | scan | cancel
+ debug/DebugCommand     /chunkdiff testdelta | scan | plan | cancel
+ scan/Plan              fichier plan (partage plugin / outil hors ligne)
+ cli/RegionRewriter, cli/Compactor, cli/CompactMain (CLI optionnel, Main-Class du jar)
+ ChunkDiffBootstrap     applique la compaction au demarrage, avant le chargement des mondes
  scan/RegionIndex       lit les en-tetes .mca (liste des chunks + taille sur disque) ; test RegionIndexTest
  Tests : src/test/java/dev/chunkdiff/delta/DeltaStoreTest (round-trip codec + store)
  Build : Gradle (CI utilise gradle 9.1.0 via setup-gradle), Java 25 toolchain, zstd-jni embarque.
@@ -69,13 +75,32 @@ ETAT D'AVANCEMENT
  [x] Phase 2  restauration des BLOCS au chargement d'un chunk neuf. VALIDE en test reel
               (3 blocs de diamant apparus via /chunkdiff testdelta). Block entities/entites : phase 2b.
  [ ] Phase 2b block entities + entites (necessite NBT / API plus bas niveau)
- [~] Phase 3  scanner LECTURE SEULE : /chunkdiff scan [monde] [n|all] (defaut 500 chunks), /chunkdiff cancel.
-              RegionIndex lit les en-tetes .mca ; PristineScanner cree un monde 'chunkdiff_ref' (meme seed),
-              compare blocs section par section, rapport PRISTINE/DELTA/FULL + gain estime.
-              FULL d'office si : block entities, entites importantes (nommees, apprivoisees, villageois, non-mobs).
-              Taille d'un delta = ESTIMATION (4 octets/bloc), a remplacer par la vraie taille en phase 4.
-              A VALIDER en test reel (voir TEST MANUEL PHASE 3).
- [ ] Phase 4  compaction reelle (suppression des chunks des .mca) + round-trip + backup
+ [x] Phase 3  scanner : /chunkdiff scan [monde] [n|all] (lecture seule), /chunkdiff cancel.
+              CI verte. NON TESTE EN REEL (l'utilisateur ne peut pas lancer de serveur) : si une IA
+              ou un testeur peut le faire, valider en priorite (rapport, dossier region, suppression
+              du monde chunkdiff_ref). RegionIndex lit les en-tetes .mca (taille + timestamp).
+              FULL d'office si : block entities, entites importantes (nommees, apprivoisees, villageois,
+              non-mobs), chunk modifie depuis moins de min-age-days.
+ [~] Phase 4  compaction en 2 temps, JAMAIS d'ecriture des .mca pendant que le serveur tourne :
+              (a) EN JEU : /chunkdiff plan [monde] [n|all] = scan + ecrit les deltas (DELTA) dans
+                  plugins/ChunkDiff/deltas et un plan plugins/ChunkDiff/plans/<monde>.plan
+                  (liste des chunks + timestamp du scan) + mc-version.txt. Ne supprime rien.
+              (b) /chunkdiff compact (affiche les consignes) puis /chunkdiff compact confirm : cree
+                  plans/APPLY. L'utilisateur REDEMARRE depuis le panel. ChunkDiffBootstrap (PluginBootstrap
+                  de Paper, declare dans paper-plugin.yml) s'execute AVANT le chargement des mondes,
+                  appelle cli/Compactor : verifie session.lock, sauvegarde dans chunkdiff-backup-<date>/
+                  (a cote de region/ ; attention quota disque hebergeur), reecrit les .mca de facon
+                  compacte (cli/RegionRewriter), retire aussi les entites (entities/) des chunks retires,
+                  NE TOUCHE PAS poi/. Un chunk dont le timestamp a change depuis le scan est GARDE.
+                  Plan renomme en .plan.done apres traitement. /chunkdiff compact cancel annule.
+                  (cli/CompactMain = outil en ligne de commande OPTIONNEL, inutilisable chez cet utilisateur.)
+              Au demarrage suivant, les chunks sont regeneres par la seed et RestoreListener rejoue les deltas.
+              Tests CI : RegionRewriterTest, PlanTest, RegionIndexTest. Bootstrapper et commandes NON TESTES
+              sur un vrai serveur (verifier : API BootstrapContext#getLogger/getDataDirectory, ordre de demarrage).
+              LIMITE MAJEURE : apres compaction le monde depend du generateur de la version MC courante.
+              Mettre a jour Minecraft change le terrain des chunks supprimes (coupures). ChunkDiffPlugin
+              logue une alerte si la version change. TODO phase 6 : commande de "decompaction"
+              (regenerer + sauvegarder tous les chunks supprimes) a lancer AVANT toute mise a jour MC.
  [ ] Phase 5  autres versions, Folia
 
 TEST MANUEL PHASE 3
