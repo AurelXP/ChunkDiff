@@ -1,0 +1,5 @@
+# Au-dela de ce ratio de blocs modifies, on garde le chunk entier.
+max-delta-ratio: 0.15
+# Ne jamais toucher aux chunks plus recents que X jours.
+min-age-days: 7
+dry-run: true
