@@ -1,5 +1,6 @@
-# Au-dela de ce ratio de blocs modifies, on garde le chunk entier.
-max-delta-ratio: 0.15
-# Ne jamais toucher aux chunks plus recents que X jours.
+# Un chunk n'est "DELTA" que si son delta estime pese moins de cette fraction de sa taille sur disque.
+max-delta-size-fraction: 0.30
+# Ne jamais toucher aux chunks plus recents que X jours (utilise en phase 4).
 min-age-days: 7
+# Toujours vrai tant que la phase 4 n'existe pas.
 dry-run: true
